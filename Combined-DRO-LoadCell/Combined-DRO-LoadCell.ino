@@ -10,6 +10,10 @@ float calibration_factor = -7050; //-7050 worked for my 440lb max scale setup
 #define pinB 3 // Interrupt pin 1 (INT1)
 #define pinR 8  // Digital pin for reference pulse
 
+#include <LCD_I2C.h>
+
+LCD_I2C lcd(0x27, 16, 2); // Default address of most PCF8574 modules, change according
+
 volatile long position = 0;  // Track the position
 volatile bool direction = true; // True for forward, false for backward
 volatile bool referenceHit = false; // To detect the reference pulse
@@ -22,6 +26,12 @@ volatile bool lastB = LOW;
 const float conversionFactor = 250.0 / -27500.0;
 
 void setup() {
+
+  lcd.begin(); // If you are using more I2C devices using the Wire library use lcd.begin(false)
+               // this stop the library(LCD_I2C) from calling Wire.begin()
+  lcd.backlight();
+
+
   Serial.begin(9600);
 
   pinMode(pinA, INPUT);
@@ -55,8 +65,12 @@ void loop() {
   Serial.print(" mm ");
   //Serial.print("\tReference: ");
   //println(referenceHit ? "Hit" : "Not Hit");
+  lcd.setCursor(0, 0);
+  lcd.print("Position: ");
+  lcd.print(positionMM);
+  lcd.print(" mm");
 
-  delay(100);
+  
 
   
 
@@ -71,6 +85,16 @@ void loop() {
     //Serial.print(" calibration_factor: ");
     //Serial.print(calibration_factor);
     Serial.println();
+
+  
+    lcd.setCursor(0, 3);
+
+    lcd.print("Weight: ");
+    lcd.print(scale.get_units(), 1);
+    lcd.print(" lbs");
+    delay(800);
+    lcd.clear();
+    
 
     if(Serial.available())
     {
