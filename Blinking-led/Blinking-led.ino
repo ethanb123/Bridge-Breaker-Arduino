@@ -35,17 +35,33 @@ void loop() {
   switchStateRed = digitalRead(ButtonRed);
 
   // If the up switch is pressed (LOW state)
+  /*
   if (switchStateUP == LOW) {
     digitalWrite(Relay1, LOW);
-    delay(1);
+    //delay(1);
   } else {
     digitalWrite(Relay1, HIGH);
+  }*/
+  
+  //btnState = digitalRead(buttonPin);
+  
+  
+  if (switchStateUP == LOW) {
+    delay(20);
+    switchStateUP = digitalRead(ButtonUP);
+    if (switchStateUP == LOW) {
+      // Toggle The Output LED Pin
+      digitalWrite(Relay1, LOW);
+    }else{
+      digitalWrite(Relay1, HIGH);
+    }
   }
+  
 
   // If the ButtonDOWN is pressed (LOW state)
   if (switchStateDOWN == LOW) {
     digitalWrite(Relay2, LOW);
-    delay(1);
+    //delay(1);
   } else {
     digitalWrite(Relay2, HIGH);
   }
