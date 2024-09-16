@@ -27,7 +27,7 @@ float calibration_factor = -7050; //-7050 worked for my 440lb max scale setup
 
 #include <LCD_I2C.h>
 
-LCD_I2C lcd(0x27, 16, 2); // Default address of most PCF8574 modules, change according
+LCD_I2C lcd(0x27, 16, 4); // Default address of most PCF8574 modules, change according
 
 volatile long position = 0;  // Track the position
 volatile bool direction = true; // True for forward, false for backward
@@ -40,6 +40,8 @@ volatile bool lastB = LOW;
 // Conversion factor based on the given range
 const float conversionFactor = 250.0 / -27500.0;
 
+float max_position = 0.0;
+float max_weight = 0.0;
 
 
 void setup (void)
@@ -92,16 +94,16 @@ void loop (void)
 
 
   lcd.setCursor(0, 0);
-  //lcd.clear();
+  //lcd.clear(0,0);
   lcd.print("Position: ");
   lcd.print(positionMM);
   lcd.print(" mm");
 
   scale.set_scale(calibration_factor); //Adjust to this calibration factor
 
-  lcd.setCursor(0, 3);
+  lcd.setCursor(0, 1);
   lcd.print("Weight: ");
-  lcd.print(scale.get_units(), 1);
+  lcd.print(scale.get_units(), 2);
   lcd.print(" lbs");
   //delay(800);
   
@@ -135,7 +137,10 @@ void loop (void)
     {
       if (pushed_green)   
         {
-          for(int i=0; i<5; i++) {
+          position = 0;
+          max_position = 0;
+          max_weight = 0.0;
+          for(int i=0; i<1; i++) {
             digitalWrite(Relay1, LOW);
             delay(200);
             digitalWrite(Relay1, HIGH);
@@ -152,18 +157,47 @@ void loop (void)
     {
       if (pushed_red)    
         {
-          for(int i=0; i<5; i++) {
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("TEST RUN");
+            
+            lcd.setCursor(0, 1);
+            
+            lcd.print("Max Distance: ");
+            lcd.print(max_position);
+            lcd.print("mm");
+
+            scale.set_scale(calibration_factor); //Adjust to this calibration factor
+
+            lcd.setCursor(0, 2);
+            lcd.print("Max Weight:   ");
+            lcd.print(max_weight);
+            lcd.print("lb");
+            delay(5000);
+            lcd.clear();
+          /*for(int i=0; i<1; i++) {
             digitalWrite(Relay2, LOW);
             delay(200);
             digitalWrite(Relay2, HIGH);
             delay(200);
-          }
+          }*/
         }
       else  
         {
-          digitalWrite(Relay2, HIGH);
+          //digitalWrite(Relay2, HIGH);
         }
     }
+
+    if (scale.get_units() >= max_weight)
+    {
+      max_weight = scale.get_units();
+    }
+
+    if (positionMM >= max_position)
+    {
+      max_position = positionMM;
+    }
+    
 }
 
 void readQuadrature() {
