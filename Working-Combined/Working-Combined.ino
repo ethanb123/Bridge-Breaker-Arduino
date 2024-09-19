@@ -45,6 +45,10 @@ float max_weight = 0.0;
 const int chipSelect = 53;
 File myFile;
 
+//double logArray[2][200];
+char filename[] = "LOG-01.csv";
+int logStartTime = 0;
+bool isLogging = false;
 
 void setup (void)
 {
@@ -58,7 +62,6 @@ void setup (void)
 
   digitalWrite(Relay1, HIGH);
   digitalWrite(Relay2, HIGH);
-
 
   lcd.begin(); // If you are using more I2C devices using the Wire library use lcd.begin(false)
   lcd.backlight();
@@ -79,172 +82,147 @@ void setup (void)
   scale.tare(); //Reset the scale to 0
 
   long zero_factor = scale.read_average(); //Get a baseline reading
-
-  //delay(20000);
 }
 
 void loop (void)
 {
-
   if (!SD.begin(chipSelect)) {
-    //lcd.clear();
+    lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("SD Card Not Detected");
-    delay(1500);
+    delay(3000);
     lcd.clear();
   }else{
+    // Convert the position to millimeters
+    float positionMM = position * conversionFactor;
 
-  
+    bool prev_up = pushed_up;
+    bool prev_down = pushed_down;
+    bool prev_green = pushed_green;
+    bool prev_red = pushed_red;
 
-  // Convert the position to millimeters
-  float positionMM = position * conversionFactor;
+    pushed_up = digitalRead (ButtonUP) == LOW;
+    pushed_down = digitalRead (ButtonDOWN) == LOW;
+    pushed_green = digitalRead (ButtonGreen) == LOW;
+    pushed_red = digitalRead (ButtonRed) == LOW;
 
+    // Print Distance on LCD
+    lcd.setCursor(0, 0);
+    lcd.print("Distance:");
+    lcd.setCursor(10, 0);
+    lcd.print(positionMM);
+    lcd.print(" mm");
 
-  bool prev_up = pushed_up;
-  bool prev_down = pushed_down;
-  bool prev_green = pushed_green;
-  bool prev_red = pushed_red;
+    scale.set_scale(calibration_factor); //Adjust to this calibration factor
 
-  pushed_up = digitalRead (ButtonUP) == LOW;
-  pushed_down = digitalRead (ButtonDOWN) == LOW;
-  pushed_green = digitalRead (ButtonGreen) == LOW;
-  pushed_red = digitalRead (ButtonRed) == LOW;
-
-  //lcd.clear();
-  lcd.setCursor(0, 0);
-  //lcd.clear(0,0);
-  lcd.print("Distance:");
-  lcd.setCursor(10, 0);
-  lcd.print(positionMM);
-  lcd.print(" mm");
-
-  scale.set_scale(calibration_factor); //Adjust to this calibration factor
-
-  lcd.setCursor(0, 1);
-  lcd.print("Weight:");
-  lcd.setCursor(10, 1);
-  float currentWeight = scale.get_units();
-  if(currentWeight < 0) {
-    lcd.print(0.00);
-  }else{
-    lcd.print(currentWeight, 2);
-  }
-  
-  lcd.print(" lbs");
-  //delay(800);
-  
-
-
- if (prev_up != pushed_up)
-    {
-      if (pushed_up && !pushed_down) // Prevents multiple button pushed
-        {
-          digitalWrite(Relay1, LOW);
-        }
-      else                                                          
-        {
-          digitalWrite(Relay1, HIGH);
-        }
+    // Print Weight on LCD
+    lcd.setCursor(0, 1);
+    lcd.print("Weight:");
+    lcd.setCursor(10, 1);
+    float currentWeight = scale.get_units();
+    // Disable negative weights (Makes output hard to read)
+    if(currentWeight < 0) {
+      lcd.print(0.00);
+    }else{
+      lcd.print(currentWeight, 2);
     }
+    lcd.print(" lbs");
 
- if (prev_down != pushed_down)
-    {
-      if (pushed_down && !pushed_up) // Prevents multiple button pushed                               
+    // Up button pushed
+    if (prev_up != pushed_up)
         {
-          digitalWrite(Relay2, LOW);
+          if (pushed_up && !pushed_down) // Prevents multiple button pushed
+            {
+              digitalWrite(Relay1, LOW);
+            }
+          else                                                          
+            {
+              digitalWrite(Relay1, HIGH);
+            }
         }
-      else                                                      
-        {
-          digitalWrite(Relay2, HIGH);
-        }
-    }
 
- if (prev_green != pushed_green)
-    {
-      if (pushed_green)   
+    // Down button pushed
+    if (prev_down != pushed_down)
         {
-          
-          max_position = 0.0;
-          max_weight = 0.0;
-          position = 0;
-          positionMM = 0;
-          for(int i=0; i<1; i++) {
-            digitalWrite(Relay1, LOW);
-            delay(200);
-            digitalWrite(Relay1, HIGH);
-            delay(200);
+          if (pushed_down && !pushed_up) // Prevents multiple button pushed                               
+            {
+              digitalWrite(Relay2, LOW);
+            }
+          else                                                      
+            {
+              digitalWrite(Relay2, HIGH);
+            }
+        }
+
+    // Green button pushed
+    if (prev_green != pushed_green)
+      {
+        if (pushed_green)   
+          {
+            newFile();
+            isLogging = true;
+            max_position = 0.0;
+            max_weight = 0.0;
+            position = 0;
+            positionMM = 0;
+            for(int i=0; i<1; i++) {
+              digitalWrite(Relay1, LOW);
+              delay(200);
+              digitalWrite(Relay1, HIGH);
+              delay(200);
+            }
           }
-        }
-      else  
-        {
-          digitalWrite(Relay1, HIGH);
-        }
-    }
+        else  
+          {
+            digitalWrite(Relay1, HIGH);
+          }
+      }
 
-   if (prev_red != pushed_red)
+    // Red button pushed
+    if (prev_red != pushed_red)
     {
       if (pushed_red)    
         {
           lcd.clear();
-          ////
-          // create a new file
-          char filename[] = "LOG-01.txt";
-          for (uint8_t i = 1; i < 100; i++) {
-            filename[4] = i/10 + '0';
-            filename[5] = i%10 + '0';
-            if (! SD.exists(filename)) {
-              // only open a new file if it doesn't exist
-              myFile = SD.open(filename, FILE_WRITE); 
-              break;  // leave the loop!
-            }
-          }
           
           // if the file opened okay, write to it:
           if (myFile) {
             //Serial.print("Writing to test.txt...");
             lcd.setCursor(0, 0);
             lcd.print("Log Number: "+String(filename[4])+String(filename[5]));
-            myFile.println("Log Number: "+String(filename[4])+String(filename[5]));
-            myFile.print("Max Distance: ");
-            myFile.println(max_position);
-            myFile.print("Max Weight: ");
-            myFile.println(max_weight);
+            myFile.println("Max Distance,"+String(max_position));
+            myFile.println("Max Weight,"+String(max_weight));
             // close the file:
             myFile.close();
-            Serial.println("done.");
+            //Serial.println("done.");
+
+            // Print max distance to LCD
+            lcd.setCursor(0, 1);
+            lcd.print("Distance:");
+            lcd.setCursor(10, 1);
+            lcd.print(max_position);
+            lcd.print(" mm");
+
+            scale.set_scale(calibration_factor); //Adjust to this calibration factor
+            // ^^ Check if can remove
+
+            // Print max weight to LCD
+            lcd.setCursor(0, 2);
+            lcd.print("Weight:");
+            lcd.setCursor(10, 2);
+            lcd.print(max_weight);
+            lcd.print(" lbs");
+            delay(5000);
+            lcd.clear();
           } else {
             // if the file didn't open, print an error:
-            Serial.println("error opening test.txt");
+            lcd.print("error opening log");
+            delay(3000);
+            lcd.clear();
           }
-          ////
-
-          //lcd.clear();
-          //lcd.setCursor(0, 0);
-          //lcd.print("TEST RUN");
           
-          lcd.setCursor(0, 1);
-          
-          lcd.print("Distance:");
-          lcd.setCursor(10, 1);
-          lcd.print(max_position);
-          lcd.print(" mm");
-
-          scale.set_scale(calibration_factor); //Adjust to this calibration factor
-
-          lcd.setCursor(0, 2);
-          lcd.print("Weight:");
-          lcd.setCursor(10, 2);
-          lcd.print(max_weight);
-          lcd.print(" lbs");
-          delay(5000);
-          lcd.clear();
-
-          /*for(int i=0; i<1; i++) {
-            digitalWrite(Relay2, LOW);
-            delay(200);
-            digitalWrite(Relay2, HIGH);
-            delay(200);
-          }*/
+         
+          isLogging=false;
         }
       else  
         {
@@ -260,6 +238,19 @@ void loop (void)
     if (positionMM >= max_position)
     {
       max_position = positionMM;
+    }
+
+    int logTime = millis()-logStartTime;
+    double logPosition = positionMM;
+    double logWeight = scale.get_units();
+
+    // CSV data entry
+    myFile.println(String(logTime)+","+String(logPosition)+","+String(logWeight));
+
+    // Display if currently logging data
+    if(isLogging){
+      lcd.setCursor(0,2);
+      lcd.print("Logging... "+String(logTime/1000)+" Sec");
     }
   }
 }
@@ -286,6 +277,22 @@ void readQuadrature() {
 
     lastA = currentA;
     lastB = currentB;
+  }
+}
+
+void newFile() {
+  
+  for (uint8_t i = 1; i < 100; i++) {
+    filename[4] = i/10 + '0';
+    filename[5] = i%10 + '0';
+    if (! SD.exists(filename)) {
+      // only open a new file if it doesn't exist
+      myFile = SD.open(filename, FILE_WRITE); 
+      logStartTime = millis();
+      myFile.println("Log Number,"+String(filename[4])+String(filename[5]));
+      myFile.println("Time,Position,Weight");
+      break;  // leave the loop!
+    }
   }
 }
 
