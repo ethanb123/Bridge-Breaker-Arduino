@@ -1,7 +1,7 @@
 
 #define pinA 2  // Interrupt pin 0 (INT0)
 #define pinB 3 // Interrupt pin 1 (INT1)
-#define pinR 8  // Digital pin for reference pulse
+#define pinR 1  // Digital pin for reference pulse
 
 volatile long position = 0;  // Track the position
 volatile bool direction = true; // True for forward, false for backward
@@ -35,7 +35,7 @@ void loop() {
 
   Serial.print("Position: ");
   Serial.print(positionMM);
-  Serial.print(" mm ");
+  Serial.println(" mm ");
   //Serial.print("\tReference: ");
   //println(referenceHit ? "Hit" : "Not Hit");
 
