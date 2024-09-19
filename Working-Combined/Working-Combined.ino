@@ -1,18 +1,17 @@
-const int ButtonUP = 12;
-const int ButtonDOWN = 11;
+const int ButtonUP = 6;
+const int ButtonDOWN = 7;
 const int ButtonGreen = 8;
 const int ButtonRed = 9;
 
-const int Relay1 = 6;
-const int Relay2 = 10;
+const int Relay1 = 10;
+const int Relay2 = 11;
 
 bool pushed_up = true;
 bool pushed_down = true;
 bool pushed_green = true;
 bool pushed_red = true;
 
-
-
+#include <SD.h>
 #include "HX711.h"
 #define DOUT  4
 #define CLK  5
@@ -43,6 +42,9 @@ const float conversionFactor = 250.0 / -27500.0;
 float max_position = 0.0;
 float max_weight = 0.0;
 
+const int chipSelect = 53;
+File myFile;
+
 
 void setup (void)
 {
@@ -53,6 +55,9 @@ void setup (void)
 
   pinMode(Relay1, OUTPUT);
   pinMode(Relay2, OUTPUT);
+
+  digitalWrite(Relay1, HIGH);
+  digitalWrite(Relay2, HIGH);
 
 
   lcd.begin(); // If you are using more I2C devices using the Wire library use lcd.begin(false)
@@ -74,10 +79,23 @@ void setup (void)
   scale.tare(); //Reset the scale to 0
 
   long zero_factor = scale.read_average(); //Get a baseline reading
+
+  //delay(20000);
 }
 
 void loop (void)
 {
+
+  if (!SD.begin(chipSelect)) {
+    //lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("SD Card Not Detected");
+    delay(1500);
+    lcd.clear();
+  }else{
+
+  
+
   // Convert the position to millimeters
   float positionMM = position * conversionFactor;
 
@@ -92,18 +110,26 @@ void loop (void)
   pushed_green = digitalRead (ButtonGreen) == LOW;
   pushed_red = digitalRead (ButtonRed) == LOW;
 
-
+  //lcd.clear();
   lcd.setCursor(0, 0);
   //lcd.clear(0,0);
-  lcd.print("Position: ");
+  lcd.print("Distance:");
+  lcd.setCursor(10, 0);
   lcd.print(positionMM);
   lcd.print(" mm");
 
   scale.set_scale(calibration_factor); //Adjust to this calibration factor
 
   lcd.setCursor(0, 1);
-  lcd.print("Weight: ");
-  lcd.print(scale.get_units(), 2);
+  lcd.print("Weight:");
+  lcd.setCursor(10, 1);
+  float currentWeight = scale.get_units();
+  if(currentWeight < 0) {
+    lcd.print(0.00);
+  }else{
+    lcd.print(currentWeight, 2);
+  }
+  
   lcd.print(" lbs");
   //delay(800);
   
@@ -137,9 +163,11 @@ void loop (void)
     {
       if (pushed_green)   
         {
-          position = 0;
-          max_position = 0;
+          
+          max_position = 0.0;
           max_weight = 0.0;
+          position = 0;
+          positionMM = 0;
           for(int i=0; i<1; i++) {
             digitalWrite(Relay1, LOW);
             delay(200);
@@ -157,24 +185,60 @@ void loop (void)
     {
       if (pushed_red)    
         {
-            lcd.clear();
+          lcd.clear();
+          ////
+          // create a new file
+          char filename[] = "LOG-01.txt";
+          for (uint8_t i = 1; i < 100; i++) {
+            filename[4] = i/10 + '0';
+            filename[5] = i%10 + '0';
+            if (! SD.exists(filename)) {
+              // only open a new file if it doesn't exist
+              myFile = SD.open(filename, FILE_WRITE); 
+              break;  // leave the loop!
+            }
+          }
+          
+          // if the file opened okay, write to it:
+          if (myFile) {
+            //Serial.print("Writing to test.txt...");
             lcd.setCursor(0, 0);
-            lcd.print("TEST RUN");
-            
-            lcd.setCursor(0, 1);
-            
-            lcd.print("Max Distance: ");
-            lcd.print(max_position);
-            lcd.print("mm");
+            lcd.print("Log Number: "+String(filename[4])+String(filename[5]));
+            myFile.println("Log Number: "+String(filename[4])+String(filename[5]));
+            myFile.print("Max Distance: ");
+            myFile.println(max_position);
+            myFile.print("Max Weight: ");
+            myFile.println(max_weight);
+            // close the file:
+            myFile.close();
+            Serial.println("done.");
+          } else {
+            // if the file didn't open, print an error:
+            Serial.println("error opening test.txt");
+          }
+          ////
 
-            scale.set_scale(calibration_factor); //Adjust to this calibration factor
+          //lcd.clear();
+          //lcd.setCursor(0, 0);
+          //lcd.print("TEST RUN");
+          
+          lcd.setCursor(0, 1);
+          
+          lcd.print("Distance:");
+          lcd.setCursor(10, 1);
+          lcd.print(max_position);
+          lcd.print(" mm");
 
-            lcd.setCursor(0, 2);
-            lcd.print("Max Weight:   ");
-            lcd.print(max_weight);
-            lcd.print("lb");
-            delay(5000);
-            lcd.clear();
+          scale.set_scale(calibration_factor); //Adjust to this calibration factor
+
+          lcd.setCursor(0, 2);
+          lcd.print("Weight:");
+          lcd.setCursor(10, 2);
+          lcd.print(max_weight);
+          lcd.print(" lbs");
+          delay(5000);
+          lcd.clear();
+
           /*for(int i=0; i<1; i++) {
             digitalWrite(Relay2, LOW);
             delay(200);
@@ -197,7 +261,7 @@ void loop (void)
     {
       max_position = positionMM;
     }
-    
+  }
 }
 
 void readQuadrature() {
