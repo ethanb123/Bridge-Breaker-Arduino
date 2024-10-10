@@ -60,8 +60,8 @@ void setup (void)
   pinMode(Relay1, OUTPUT);
   pinMode(Relay2, OUTPUT);
 
-  digitalWrite(Relay1, HIGH);
-  digitalWrite(Relay2, HIGH);
+  digitalWrite(Relay1, LOW);
+  digitalWrite(Relay2, LOW);
 
   lcd.begin(); // If you are using more I2C devices using the Wire library use lcd.begin(false)
   lcd.backlight();
@@ -133,11 +133,11 @@ void loop (void)
         {
           if (pushed_up && !pushed_down) // Prevents multiple button pushed
             {
-              digitalWrite(Relay1, LOW);
+              digitalWrite(Relay1, HIGH);
             }
           else                                                          
             {
-              digitalWrite(Relay1, HIGH);
+              digitalWrite(Relay1, LOW);
             }
         }
 
@@ -146,11 +146,11 @@ void loop (void)
         {
           if (pushed_down && !pushed_up) // Prevents multiple button pushed                               
             {
-              digitalWrite(Relay2, LOW);
+              digitalWrite(Relay2, HIGH);
             }
           else                                                      
             {
-              digitalWrite(Relay2, HIGH);
+              digitalWrite(Relay2, LOW);
             }
         }
 
@@ -166,15 +166,15 @@ void loop (void)
             position = 0;
             positionMM = 0;
             for(int i=0; i<1; i++) {
-              digitalWrite(Relay1, LOW);
-              delay(200);
               digitalWrite(Relay1, HIGH);
+              delay(200);
+              digitalWrite(Relay1, LOW);
               delay(200);
             }
           }
         else  
           {
-            digitalWrite(Relay1, HIGH);
+            digitalWrite(Relay1, LOW);
           }
       }
 
