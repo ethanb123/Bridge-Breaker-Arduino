@@ -71,7 +71,6 @@ void setup (void)
   digitalWrite(Relay3, LOW);
   digitalWrite(Relay4, LOW);
 
-
   lcd.begin(); // If you are using more I2C devices using the Wire library use lcd.begin(false)
   lcd.backlight();
 
@@ -87,11 +86,10 @@ void setup (void)
   attachInterrupt(digitalPinToInterrupt(pinR), referencePulse, FALLING);
 
   scale.begin(DOUT, CLK);
-  scale.set_scale();
   scale.tare(); //Reset the scale to 0
 
-  long zero_factor = scale.read_average(); //Get a baseline reading
-
+  //long zero_factor = scale.read_average(); //Get a baseline reading
+  // ^ Check if can remove
   scale.set_scale(calibration_factor); //Adjust to this calibration factor
 }
 
@@ -123,8 +121,6 @@ void loop (void)
     lcd.setCursor(10, 0);
     lcd.print(positionMM);
     lcd.print(" mm");
-
-    
 
     // Print Weight on LCD
     lcd.setCursor(0, 1);
@@ -180,6 +176,8 @@ void loop (void)
             position = 0;
             positionMM = 0;
 
+            //delay(500);
+
             digitalWrite(Relay2, HIGH);// Turn on Motor Down
           }
         else  
@@ -198,12 +196,12 @@ void loop (void)
             digitalWrite(Relay2, LOW); // turn motor off
             endLog();
             digitalWrite(Relay4, HIGH); // Turn on Red Light
-            delay(5);
+            delay(1000);
             digitalWrite(Relay4, LOW); // Turn off Red light
           }
           position = 0;
           digitalWrite(Relay4, HIGH); // Turn on Red Light
-          delay(1);
+          delay(1000);
           digitalWrite(Relay4, LOW); // Turn off Red light
         }
       else  
@@ -212,9 +210,9 @@ void loop (void)
         }
     }
 
-    if (scale.get_units() >= max_weight)
+    if (currentWeight >= max_weight)
     {
-      max_weight = scale.get_units();
+      max_weight = currentWeight;
     }
 
     if (positionMM >= max_position)
@@ -224,19 +222,17 @@ void loop (void)
 
     int logTime = millis()-logStartTime;
     double logPosition = positionMM;
-    double logWeight = scale.get_units();
-
-    // CSV data entry
-    myFile.println(String(logTime)+","+String(logPosition)+","+String(logWeight));
+    double logWeight = currentWeight;  
 
     // Display if currently logging data
     if(isLogging){
       
+      logData(String(logTime),String(logPosition),String(logWeight));
       
       lcd.setCursor(0,2);
       lcd.print("Logging... "+String(logTime/1000)+" Sec");
 
-      if( (scale.get_units()+5) < max_weight) {
+      if( (currentWeight+5) < max_weight) {
         digitalWrite(Relay2, LOW);
         isLogging = false;
         endLog();
@@ -274,65 +270,108 @@ void readQuadrature() {
 
 void endLog() {
   digitalWrite(Relay3, LOW);
-          digitalWrite(Relay4, HIGH);
-          lcd.clear();
-          
-          // if the file opened okay, write to it:
-          if (myFile) {
-            //Serial.print("Writing to test.txt...");
-            lcd.setCursor(0, 0);
-            lcd.print("Log Number: "+String(filename[4])+String(filename[5])+String(filename[6]));
-            myFile.println("Max Distance,"+String(max_position));
-            myFile.println("Max Weight,"+String(max_weight));
-            // close the file:
-            myFile.close();
-            //Serial.println("done.");
+  digitalWrite(Relay4, HIGH);
+  lcd.clear();
 
-            // Print max distance to LCD
-            lcd.setCursor(0, 1);
-            lcd.print("Distance:");
-            lcd.setCursor(10, 1);
-            lcd.print(max_position);
-            lcd.print(" mm");
+  int logTime = millis()-logStartTime;
+  double logPosition = position * conversionFactor;
+  double logWeight = scale.get_units();
+  
+  lcd.setCursor(0, 0);
+  lcd.print("Log Number: "+String(filename[4])+String(filename[5])+String(filename[6]));
 
-            scale.set_scale(calibration_factor); //Adjust to this calibration factor
-            // ^^ Check if can remove
+  // Print max distance to LCD
+  lcd.setCursor(0, 1);
+  lcd.print("Distance:");
+  lcd.setCursor(10, 1);
+  lcd.print(max_position);
+  lcd.print(" mm");
 
-            // Print max weight to LCD
-            lcd.setCursor(0, 2);
-            lcd.print("Weight:");
-            lcd.setCursor(10, 2);
-            lcd.print(max_weight);
-            lcd.print(" lbs");
-            delay(5000);
-            lcd.clear();
-          } else {
-            // if the file didn't open, print an error:
-            lcd.print("error opening log");
-            delay(3000);
-            lcd.clear();
-          }
-          isLogging=false;
+  // Print max weight to LCD
+  lcd.setCursor(0, 2);
+  lcd.print("Weight:");
+  lcd.setCursor(10, 2);
+  lcd.print(max_weight);
+  lcd.print(" lbs");
+
+  // Last log entry
+  logData(String(logTime),String(logPosition),String(logWeight));
+  endLogging();
+
+  delay(5000);
+  lcd.clear();
+
+  isLogging=false;
 }
+// Declare lastFileIndex globally
+uint16_t lastFileIndex = 1; // Store the last used file index globally
+
+// Buffer to hold data before writing to SD
+#define BUFFER_SIZE 512  // Adjust buffer size as needed
+char dataBuffer[BUFFER_SIZE];
+uint16_t bufferIndex = 0;
 
 void newFile() {
-  
-  for (uint16_t i = 1; i < 1000; i++) {
+  for (uint16_t i = lastFileIndex; i < 1000; i++) {
       filename[4] = i / 100 + '0';       // Hundreds place
       filename[5] = (i / 10) % 10 + '0'; // Tens place
       filename[6] = i % 10 + '0';        // Units place
+
       if (!SD.exists(filename)) {
-          // Only open a new file if it doesn't exist
           myFile = SD.open(filename, FILE_WRITE); 
-          logStartTime = millis();
-          myFile.println("Log Number," + String(filename[4]) + String(filename[5]) + String(filename[6]));
-          myFile.println("Time,Position,Weight");
-          break;  // Leave the loop
+          if (myFile) {
+              logStartTime = millis();
+              lastFileIndex = i + 1;  // Update last used index
+              
+              // Initialize file header
+              addToBuffer("Log Number," + String(filename[4]) + String(filename[5]) + String(filename[6]) + "\n");
+              addToBuffer("Time,Position,Weight\n");
+              break;  // Leave the loop
+          }
       }
   }
-
 }
 
+// Function to add data to the buffer
+void addToBuffer(String data) {
+  for (size_t i = 0; i < data.length(); i++) {
+      if (bufferIndex < BUFFER_SIZE - 1) {
+          dataBuffer[bufferIndex++] = data[i];
+      } else {
+          flushBuffer();  // Flush buffer when full
+          dataBuffer[bufferIndex++] = data[i];
+      }
+  }
+}
+
+// Function to write the buffer to the SD card
+void flushBuffer() {
+  if (bufferIndex > 0) {
+      dataBuffer[bufferIndex] = '\0';  // Null-terminate the buffer
+      myFile.write(dataBuffer, bufferIndex);
+      myFile.flush();  // Ensure data is written to the card
+      bufferIndex = 0;  // Reset the buffer index
+  }
+}
+
+// Call this function to add data to the buffer during logging
+void logData(String time, String position, String weight) {
+  addToBuffer(time + "," + position + "," + weight + "\n");
+
+  // Optional: Flush the buffer periodically, e.g., every 100 ms
+  //if (millis() - logStartTime > 100) {
+  //    flushBuffer();
+  //    logStartTime = millis();  // Reset log start time
+  //}
+}
+
+// Ensure the buffer is flushed when done
+void endLogging() {
+  flushBuffer();
+  if (myFile) {
+      myFile.close();  // Close the file
+  }
+}
 
 void referencePulse() {
   referenceHit = true;
