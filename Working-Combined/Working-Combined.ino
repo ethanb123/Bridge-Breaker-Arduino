@@ -1,10 +1,12 @@
 const int ButtonUP = 6;
 const int ButtonDOWN = 7;
-const int ButtonGreen = 8;
+const int ButtonGreen = 49;
 const int ButtonRed = 9;
 
 const int Relay1 = 10;
 const int Relay2 = 11;
+const int Relay3 = 12;
+const int Relay4 = 48;
 
 bool pushed_up = true;
 bool pushed_down = true;
@@ -37,7 +39,7 @@ volatile bool lastA = LOW;
 volatile bool lastB = LOW;
 
 // Conversion factor based on the given range
-const float conversionFactor = 250.0 / -27500.0;
+const float conversionFactor = 250.0 / 27500.0;
 
 float max_position = 0.0;
 float max_weight = 0.0;
@@ -46,12 +48,14 @@ const int chipSelect = 53;
 File myFile;
 
 //double logArray[2][200];
-char filename[] = "LOG-01.csv";
+char filename[] = "LOG-001.csv";
 int logStartTime = 0;
 bool isLogging = false;
 
 void setup (void)
 {
+  Serial.begin(9600);
+
   pinMode (ButtonUP, INPUT_PULLUP);
   pinMode (ButtonDOWN, INPUT_PULLUP);
   pinMode (ButtonGreen, INPUT_PULLUP);
@@ -59,9 +63,14 @@ void setup (void)
 
   pinMode(Relay1, OUTPUT);
   pinMode(Relay2, OUTPUT);
+  pinMode(Relay3, OUTPUT);
+  pinMode(Relay4, OUTPUT);
 
   digitalWrite(Relay1, LOW);
   digitalWrite(Relay2, LOW);
+  digitalWrite(Relay3, LOW);
+  digitalWrite(Relay4, LOW);
+
 
   lcd.begin(); // If you are using more I2C devices using the Wire library use lcd.begin(false)
   lcd.backlight();
@@ -82,6 +91,8 @@ void setup (void)
   scale.tare(); //Reset the scale to 0
 
   long zero_factor = scale.read_average(); //Get a baseline reading
+
+  scale.set_scale(calibration_factor); //Adjust to this calibration factor
 }
 
 void loop (void)
@@ -113,7 +124,7 @@ void loop (void)
     lcd.print(positionMM);
     lcd.print(" mm");
 
-    scale.set_scale(calibration_factor); //Adjust to this calibration factor
+    
 
     // Print Weight on LCD
     lcd.setCursor(0, 1);
@@ -159,22 +170,22 @@ void loop (void)
       {
         if (pushed_green)   
           {
+            digitalWrite(Relay4, LOW); // turn off Red light
+            digitalWrite(Relay3, HIGH);// turn on Green light
+            
             newFile();
             isLogging = true;
             max_position = 0.0;
             max_weight = 0.0;
             position = 0;
             positionMM = 0;
-            for(int i=0; i<1; i++) {
-              digitalWrite(Relay1, HIGH);
-              delay(200);
-              digitalWrite(Relay1, LOW);
-              delay(200);
-            }
+
+            digitalWrite(Relay2, HIGH);// Turn on Motor Down
           }
         else  
           {
-            digitalWrite(Relay1, LOW);
+            //digitalWrite(Relay1, LOW);
+            //digitalWrite(Relay3, LOW);
           }
       }
 
@@ -183,13 +194,94 @@ void loop (void)
     {
       if (pushed_red)    
         {
+          if(isLogging){
+            digitalWrite(Relay2, LOW); // turn motor off
+            endLog();
+            digitalWrite(Relay4, HIGH); // Turn on Red Light
+            delay(5);
+            digitalWrite(Relay4, LOW); // Turn off Red light
+          }
+          position = 0;
+          digitalWrite(Relay4, HIGH); // Turn on Red Light
+          delay(1);
+          digitalWrite(Relay4, LOW); // Turn off Red light
+        }
+      else  
+        {
+          //digitalWrite(Relay4, LOW);
+        }
+    }
+
+    if (scale.get_units() >= max_weight)
+    {
+      max_weight = scale.get_units();
+    }
+
+    if (positionMM >= max_position)
+    {
+      max_position = positionMM;
+    }
+
+    int logTime = millis()-logStartTime;
+    double logPosition = positionMM;
+    double logWeight = scale.get_units();
+
+    // CSV data entry
+    myFile.println(String(logTime)+","+String(logPosition)+","+String(logWeight));
+
+    // Display if currently logging data
+    if(isLogging){
+      
+      
+      lcd.setCursor(0,2);
+      lcd.print("Logging... "+String(logTime/1000)+" Sec");
+
+      if( (scale.get_units()+5) < max_weight) {
+        digitalWrite(Relay2, LOW);
+        isLogging = false;
+        endLog();
+        delay(5);
+        digitalWrite(Relay4, LOW);
+      }
+    }
+  }
+}
+
+void readQuadrature() {
+  bool currentA = digitalRead(pinA);
+  bool currentB = digitalRead(pinB);
+
+  if (currentA != lastA || currentB != lastB) {
+    // Determine direction based on the change in A and B states
+    if (lastA == LOW && currentA == HIGH) {
+      if (currentB == LOW) {
+        position++;
+      } else {
+        position--;
+      }
+    } else if (lastA == HIGH && currentA == LOW) {
+      if (currentB == HIGH) {
+        position++;
+      } else {
+        position--;
+      }
+    }
+
+    lastA = currentA;
+    lastB = currentB;
+  }
+}
+
+void endLog() {
+  digitalWrite(Relay3, LOW);
+          digitalWrite(Relay4, HIGH);
           lcd.clear();
           
           // if the file opened okay, write to it:
           if (myFile) {
             //Serial.print("Writing to test.txt...");
             lcd.setCursor(0, 0);
-            lcd.print("Log Number: "+String(filename[4])+String(filename[5]));
+            lcd.print("Log Number: "+String(filename[4])+String(filename[5])+String(filename[6]));
             myFile.println("Max Distance,"+String(max_position));
             myFile.println("Max Weight,"+String(max_weight));
             // close the file:
@@ -220,81 +312,27 @@ void loop (void)
             delay(3000);
             lcd.clear();
           }
-          
-         
           isLogging=false;
-        }
-      else  
-        {
-          //digitalWrite(Relay2, HIGH);
-        }
-    }
-
-    if (scale.get_units() >= max_weight)
-    {
-      max_weight = scale.get_units();
-    }
-
-    if (positionMM >= max_position)
-    {
-      max_position = positionMM;
-    }
-
-    int logTime = millis()-logStartTime;
-    double logPosition = positionMM;
-    double logWeight = scale.get_units();
-
-    // CSV data entry
-    myFile.println(String(logTime)+","+String(logPosition)+","+String(logWeight));
-
-    // Display if currently logging data
-    if(isLogging){
-      lcd.setCursor(0,2);
-      lcd.print("Logging... "+String(logTime/1000)+" Sec");
-    }
-  }
-}
-
-void readQuadrature() {
-  bool currentA = digitalRead(pinA);
-  bool currentB = digitalRead(pinB);
-
-  if (currentA != lastA || currentB != lastB) {
-    // Determine direction based on the change in A and B states
-    if (lastA == LOW && currentA == HIGH) {
-      if (currentB == LOW) {
-        position++;
-      } else {
-        position--;
-      }
-    } else if (lastA == HIGH && currentA == LOW) {
-      if (currentB == HIGH) {
-        position++;
-      } else {
-        position--;
-      }
-    }
-
-    lastA = currentA;
-    lastB = currentB;
-  }
 }
 
 void newFile() {
   
-  for (uint8_t i = 1; i < 100; i++) {
-    filename[4] = i/10 + '0';
-    filename[5] = i%10 + '0';
-    if (! SD.exists(filename)) {
-      // only open a new file if it doesn't exist
-      myFile = SD.open(filename, FILE_WRITE); 
-      logStartTime = millis();
-      myFile.println("Log Number,"+String(filename[4])+String(filename[5]));
-      myFile.println("Time,Position,Weight");
-      break;  // leave the loop!
-    }
+  for (uint16_t i = 1; i < 1000; i++) {
+      filename[4] = i / 100 + '0';       // Hundreds place
+      filename[5] = (i / 10) % 10 + '0'; // Tens place
+      filename[6] = i % 10 + '0';        // Units place
+      if (!SD.exists(filename)) {
+          // Only open a new file if it doesn't exist
+          myFile = SD.open(filename, FILE_WRITE); 
+          logStartTime = millis();
+          myFile.println("Log Number," + String(filename[4]) + String(filename[5]) + String(filename[6]));
+          myFile.println("Time,Position,Weight");
+          break;  // Leave the loop
+      }
   }
+
 }
+
 
 void referencePulse() {
   referenceHit = true;
