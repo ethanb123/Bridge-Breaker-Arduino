@@ -5,8 +5,11 @@ const int ButtonRed = 9;
 
 const int Relay1 = 10;
 const int Relay2 = 11;
-const int Relay3 = 12;
+const int Relay3 = 41;
 const int Relay4 = 48;
+
+int RPWM_Output = 12; 
+int LPWM_Output = 13; 
 
 bool pushed_up = true;
 bool pushed_down = true;
@@ -51,6 +54,7 @@ File myFile;
 char filename[] = "LOG-001.csv";
 int logStartTime = 0;
 bool isLogging = false;
+int motorSpeed = 50;
 
 void setup (void)
 {
@@ -65,6 +69,9 @@ void setup (void)
   pinMode(Relay2, OUTPUT);
   pinMode(Relay3, OUTPUT);
   pinMode(Relay4, OUTPUT);
+
+  pinMode(RPWM_Output, OUTPUT);
+  pinMode(LPWM_Output, OUTPUT);
 
   digitalWrite(Relay1, LOW);
   digitalWrite(Relay2, LOW);
@@ -138,13 +145,55 @@ void loop (void)
     // Up button pushed
     if (prev_up != pushed_up)
         {
+          if (pushed_up && pushed_down)
+            {
+              lcd.clear();
+              double startTime = millis();
+              lcd.setCursor(0,0);
+              lcd.print("Motor Speed: "+String(motorSpeed)+"%");
+              analogWrite(LPWM_Output, 0);
+              analogWrite(RPWM_Output, 0);
+
+              digitalWrite(Relay1, HIGH);
+              digitalWrite(Relay2, HIGH);
+              delay(750);
+              while (startTime+3000 > millis()) {
+                if (digitalRead (ButtonUP) == LOW){
+                  if(motorSpeed<100){
+                    motorSpeed += 5;
+                    delay(300);
+                    startTime = millis();
+                    lcd.clear();
+                  }
+                }
+                if (digitalRead (ButtonDOWN) == LOW){
+                  if(motorSpeed>10){
+                    motorSpeed -= 5;
+                    delay(300);
+                    startTime = millis();
+                    lcd.clear();
+                  }
+                }
+                lcd.setCursor(0,0);
+                lcd.print("Motor Speed: "+String(motorSpeed)+"%");
+              }
+              lcd.clear();
+              digitalWrite(Relay1, LOW);
+              digitalWrite(Relay2, LOW);
+            }
+        
           if (pushed_up && !pushed_down) // Prevents multiple button pushed
             {
               digitalWrite(Relay1, HIGH);
+
+              analogWrite(RPWM_Output, 0);
+              analogWrite(LPWM_Output, (motorSpeed*2.55));
             }
           else                                                          
             {
               digitalWrite(Relay1, LOW);
+
+              analogWrite(LPWM_Output, 0);
             }
         }
 
@@ -154,10 +203,15 @@ void loop (void)
           if (pushed_down && !pushed_up) // Prevents multiple button pushed                               
             {
               digitalWrite(Relay2, HIGH);
+
+              analogWrite(LPWM_Output, 0);
+              analogWrite(RPWM_Output, (motorSpeed*2.55));
             }
           else                                                      
             {
               digitalWrite(Relay2, LOW);
+
+              analogWrite(RPWM_Output, 0);
             }
         }
 
@@ -178,7 +232,9 @@ void loop (void)
 
             //delay(500);
 
-            digitalWrite(Relay2, HIGH);// Turn on Motor Down
+            digitalWrite(Relay2, HIGH);// Turn on Motor Down light
+            analogWrite(LPWM_Output, 0);
+            analogWrite(RPWM_Output, (motorSpeed*2.55));
           }
         else  
           {
@@ -193,11 +249,10 @@ void loop (void)
       if (pushed_red)    
         {
           if(isLogging){
-            digitalWrite(Relay2, LOW); // turn motor off
+            digitalWrite(Relay2, LOW); // turn motor light off
+            analogWrite(LPWM_Output, 0);
+            analogWrite(RPWM_Output, 0);
             endLog();
-            digitalWrite(Relay4, HIGH); // Turn on Red Light
-            delay(1000);
-            digitalWrite(Relay4, LOW); // Turn off Red light
           }
           position = 0;
           digitalWrite(Relay4, HIGH); // Turn on Red Light
@@ -232,8 +287,10 @@ void loop (void)
       lcd.setCursor(0,2);
       lcd.print("Logging... "+String(logTime/1000)+" Sec");
 
-      if( (currentWeight+5) < max_weight) {
+      if( (currentWeight*1.25+2) < max_weight) {
         digitalWrite(Relay2, LOW);
+        analogWrite(RPWM_Output, 0);
+
         isLogging = false;
         endLog();
         delay(5);
@@ -324,8 +381,9 @@ void newFile() {
               lastFileIndex = i + 1;  // Update last used index
               
               // Initialize file header
-              addToBuffer("Log Number," + String(filename[4]) + String(filename[5]) + String(filename[6]) + "\n");
-              addToBuffer("Time,Position,Weight\n");
+              addToBuffer("Log Number:," + String(filename[4]) + String(filename[5]) + String(filename[6]) + "\n");
+              addToBuffer("Motor Power:,"+String(motorSpeed)+"%\n");
+              addToBuffer("Time(ms),Position(mm),Weight(lbs)\n");
               break;  // Leave the loop
           }
       }
