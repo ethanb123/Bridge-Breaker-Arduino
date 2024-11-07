@@ -23,7 +23,7 @@ bool pushed_red = true;
 
 HX711 scale;
 
-float calibration_factor = -7050; //-7050 worked for my 440lb max scale setup
+float calibration_factor = -9970; 
 
 #define pinA 2  // Interrupt pin 0 (INT0)
 #define pinB 3 // Interrupt pin 1 (INT1)
@@ -56,9 +56,8 @@ int logStartTime = 0;
 bool isLogging = false;
 int motorSpeed = 50;
 
-void setup (void)
-{
-  Serial.begin(9600);
+void setup (void) {
+  //Serial.begin(9600);  // Used when debugging
 
   pinMode (ButtonUP, INPUT_PULLUP);
   pinMode (ButtonDOWN, INPUT_PULLUP);
@@ -94,21 +93,17 @@ void setup (void)
 
   scale.begin(DOUT, CLK);
   scale.tare(); //Reset the scale to 0
-
-  //long zero_factor = scale.read_average(); //Get a baseline reading
-  // ^ Check if can remove
   scale.set_scale(calibration_factor); //Adjust to this calibration factor
 }
 
-void loop (void)
-{
+void loop (void) {
   if (!SD.begin(chipSelect)) {
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("SD Card Not Detected");
     delay(3000);
     lcd.clear();
-  }else{
+  } else {
     // Convert the position to millimeters
     float positionMM = position * conversionFactor;
 
@@ -137,141 +132,113 @@ void loop (void)
     // Disable negative weights (Makes output hard to read)
     if(currentWeight < 0) {
       lcd.print(0.00);
-    }else{
+    } else {
       lcd.print(currentWeight, 2);
     }
     lcd.print(" lbs");
 
     // Up button pushed
-    if (prev_up != pushed_up)
-        {
-          if (pushed_up && pushed_down)
-            {
+    if (prev_up != pushed_up) {
+      if (pushed_up && pushed_down) {
+        lcd.clear();
+        double startTime = millis();
+        lcd.setCursor(0,0);
+        lcd.print("Motor Speed: "+String(motorSpeed)+"%");
+        analogWrite(LPWM_Output, 0);
+        analogWrite(RPWM_Output, 0);
+
+        digitalWrite(Relay1, HIGH);
+        digitalWrite(Relay2, HIGH);
+        delay(750);
+        while (startTime+3000 > millis()) {
+          if (digitalRead (ButtonUP) == LOW) {
+            if(motorSpeed<100) {
+              motorSpeed += 5;
+              delay(300);
+              startTime = millis();
               lcd.clear();
-              double startTime = millis();
-              lcd.setCursor(0,0);
-              lcd.print("Motor Speed: "+String(motorSpeed)+"%");
-              analogWrite(LPWM_Output, 0);
-              analogWrite(RPWM_Output, 0);
-
-              digitalWrite(Relay1, HIGH);
-              digitalWrite(Relay2, HIGH);
-              delay(750);
-              while (startTime+3000 > millis()) {
-                if (digitalRead (ButtonUP) == LOW){
-                  if(motorSpeed<100){
-                    motorSpeed += 5;
-                    delay(300);
-                    startTime = millis();
-                    lcd.clear();
-                  }
-                }
-                if (digitalRead (ButtonDOWN) == LOW){
-                  if(motorSpeed>10){
-                    motorSpeed -= 5;
-                    delay(300);
-                    startTime = millis();
-                    lcd.clear();
-                  }
-                }
-                lcd.setCursor(0,0);
-                lcd.print("Motor Speed: "+String(motorSpeed)+"%");
-              }
+            }
+          }
+          if (digitalRead (ButtonDOWN) == LOW) {
+            if(motorSpeed>10) {
+              motorSpeed -= 5;
+              delay(300);
+              startTime = millis();
               lcd.clear();
-              digitalWrite(Relay1, LOW);
-              digitalWrite(Relay2, LOW);
             }
-        
-          if (pushed_up && !pushed_down) // Prevents multiple button pushed
-            {
-              digitalWrite(Relay1, HIGH);
-
-              analogWrite(RPWM_Output, 0);
-              analogWrite(LPWM_Output, (motorSpeed*2.55));
-            }
-          else                                                          
-            {
-              digitalWrite(Relay1, LOW);
-
-              analogWrite(LPWM_Output, 0);
-            }
-        }
-
-    // Down button pushed
-    if (prev_down != pushed_down)
-        {
-          if (pushed_down && !pushed_up) // Prevents multiple button pushed                               
-            {
-              digitalWrite(Relay2, HIGH);
-
-              analogWrite(LPWM_Output, 0);
-              analogWrite(RPWM_Output, (motorSpeed*2.55));
-            }
-          else                                                      
-            {
-              digitalWrite(Relay2, LOW);
-
-              analogWrite(RPWM_Output, 0);
-            }
-        }
-
-    // Green button pushed
-    if (prev_green != pushed_green)
-      {
-        if (pushed_green)   
-          {
-            digitalWrite(Relay4, LOW); // turn off Red light
-            digitalWrite(Relay3, HIGH);// turn on Green light
-            
-            newFile();
-            isLogging = true;
-            max_position = 0.0;
-            max_weight = 0.0;
-            position = 0;
-            positionMM = 0;
-
-            //delay(500);
-
-            digitalWrite(Relay2, HIGH);// Turn on Motor Down light
-            analogWrite(LPWM_Output, 0);
-            analogWrite(RPWM_Output, (motorSpeed*2.55));
           }
-        else  
-          {
-            //digitalWrite(Relay1, LOW);
-            //digitalWrite(Relay3, LOW);
-          }
+          lcd.setCursor(0,0);
+          lcd.print("Motor Speed: "+String(motorSpeed)+"%");
+        }
+        lcd.clear();
+        digitalWrite(Relay1, LOW);
+        digitalWrite(Relay2, LOW);
       }
-
-    // Red button pushed
-    if (prev_red != pushed_red)
-    {
-      if (pushed_red)    
-        {
-          if(isLogging){
-            digitalWrite(Relay2, LOW); // turn motor light off
-            analogWrite(LPWM_Output, 0);
-            analogWrite(RPWM_Output, 0);
-            endLog();
-          }
-          position = 0;
-          digitalWrite(Relay4, HIGH); // Turn on Red Light
-          delay(1000);
-          digitalWrite(Relay4, LOW); // Turn off Red light
-        }
-      else  
-        {
-          //digitalWrite(Relay4, LOW);
-        }
+    
+      if (pushed_up && !pushed_down) { // Prevents multiple button pushed
+        digitalWrite(Relay1, HIGH);
+        analogWrite(RPWM_Output, 0);
+        analogWrite(LPWM_Output, (motorSpeed*2.55));
+      }
+      else {
+        digitalWrite(Relay1, LOW);
+        analogWrite(LPWM_Output, 0);
+      }
     }
 
-    if (currentWeight >= max_weight)
-    {
+    // Down button pushed
+    if (prev_down != pushed_down) {
+      if (pushed_down && !pushed_up) {  // Prevents multiple button pushed 
+          digitalWrite(Relay2, HIGH);
+          analogWrite(LPWM_Output, 0);
+          analogWrite(RPWM_Output, (motorSpeed*2.55));
+      }
+      else {
+          digitalWrite(Relay2, LOW);
+          analogWrite(RPWM_Output, 0);
+      }
+    }
+
+    // Green button pushed
+    if (prev_green != pushed_green) {
+      if (pushed_green) {
+        digitalWrite(Relay4, LOW); // turn off Red light
+        digitalWrite(Relay3, HIGH);// turn on Green light
+        
+        newFile();
+        isLogging = true;
+        max_position = 0.0;
+        max_weight = 0.0;
+        position = 0;
+        positionMM = 0;
+
+        digitalWrite(Relay2, HIGH);// Turn on Motor Down light
+        analogWrite(LPWM_Output, 0);
+        analogWrite(RPWM_Output, (motorSpeed*2.55));
+      }
+    }
+
+    // Red button pushed
+    if (prev_red != pushed_red) {
+      if (pushed_red) {
+        if(isLogging) {
+          digitalWrite(Relay2, LOW); // turn motor light off
+          analogWrite(LPWM_Output, 0);
+          analogWrite(RPWM_Output, 0);
+          endLog();
+        }
+        position = 0;
+        digitalWrite(Relay4, HIGH); // Turn on Red Light
+        delay(1000);
+        digitalWrite(Relay4, LOW); // Turn off Red light
+      }
+    }
+
+    if (currentWeight >= max_weight) {
       max_weight = currentWeight;
     }
 
-    if (positionMM >= max_position)
-    {
+    if (positionMM >= max_position) {
       max_position = positionMM;
     }
 
@@ -280,8 +247,7 @@ void loop (void)
     double logWeight = currentWeight;  
 
     // Display if currently logging data
-    if(isLogging){
-      
+    if(isLogging) {
       logData(String(logTime),String(logPosition),String(logWeight));
       
       lcd.setCursor(0,2);
@@ -360,6 +326,7 @@ void endLog() {
 
   isLogging=false;
 }
+
 // Declare lastFileIndex globally
 uint16_t lastFileIndex = 1; // Store the last used file index globally
 
@@ -370,64 +337,58 @@ uint16_t bufferIndex = 0;
 
 void newFile() {
   for (uint16_t i = lastFileIndex; i < 1000; i++) {
-      filename[4] = i / 100 + '0';       // Hundreds place
-      filename[5] = (i / 10) % 10 + '0'; // Tens place
-      filename[6] = i % 10 + '0';        // Units place
+    filename[4] = i / 100 + '0';       // Hundreds place
+    filename[5] = (i / 10) % 10 + '0'; // Tens place
+    filename[6] = i % 10 + '0';        // Units place
 
-      if (!SD.exists(filename)) {
-          myFile = SD.open(filename, FILE_WRITE); 
-          if (myFile) {
-              logStartTime = millis();
-              lastFileIndex = i + 1;  // Update last used index
-              
-              // Initialize file header
-              addToBuffer("Log Number:," + String(filename[4]) + String(filename[5]) + String(filename[6]) + "\n");
-              addToBuffer("Motor Power:,"+String(motorSpeed)+"%\n");
-              addToBuffer("Time(ms),Position(mm),Weight(lbs)\n");
-              break;  // Leave the loop
-          }
+    if (!SD.exists(filename)) {
+      myFile = SD.open(filename, FILE_WRITE); 
+      if (myFile) {
+        logStartTime = millis();
+        lastFileIndex = i + 1;  // Update last used index
+        
+        // Initialize file header
+        addToBuffer("Log Number:," + String(filename[4]) + String(filename[5]) + String(filename[6]) + "\n");
+        addToBuffer("Motor Power:,"+String(motorSpeed)+"%\n");
+        addToBuffer("Time(ms),Position(mm),Weight(lbs)\n");
+        break;  // Leave the loop
       }
+    }
   }
 }
 
 // Function to add data to the buffer
 void addToBuffer(String data) {
   for (size_t i = 0; i < data.length(); i++) {
-      if (bufferIndex < BUFFER_SIZE - 1) {
-          dataBuffer[bufferIndex++] = data[i];
-      } else {
-          flushBuffer();  // Flush buffer when full
-          dataBuffer[bufferIndex++] = data[i];
-      }
+    if (bufferIndex < BUFFER_SIZE - 1) {
+      dataBuffer[bufferIndex++] = data[i];
+    } else {
+      flushBuffer();  // Flush buffer when full
+      dataBuffer[bufferIndex++] = data[i];
+    }
   }
 }
 
 // Function to write the buffer to the SD card
 void flushBuffer() {
   if (bufferIndex > 0) {
-      dataBuffer[bufferIndex] = '\0';  // Null-terminate the buffer
-      myFile.write(dataBuffer, bufferIndex);
-      myFile.flush();  // Ensure data is written to the card
-      bufferIndex = 0;  // Reset the buffer index
+    dataBuffer[bufferIndex] = '\0';  // Null-terminate the buffer
+    myFile.write(dataBuffer, bufferIndex);
+    myFile.flush();  // Ensure data is written to the card
+    bufferIndex = 0;  // Reset the buffer index
   }
 }
 
 // Call this function to add data to the buffer during logging
 void logData(String time, String position, String weight) {
   addToBuffer(time + "," + position + "," + weight + "\n");
-
-  // Optional: Flush the buffer periodically, e.g., every 100 ms
-  //if (millis() - logStartTime > 100) {
-  //    flushBuffer();
-  //    logStartTime = millis();  // Reset log start time
-  //}
 }
 
 // Ensure the buffer is flushed when done
 void endLogging() {
   flushBuffer();
   if (myFile) {
-      myFile.close();  // Close the file
+    myFile.close();  // Close the file
   }
 }
 
