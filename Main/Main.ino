@@ -45,7 +45,7 @@ volatile bool lastB = LOW;
 const float conversionFactor = 250.0 / 27500.0;
 
 float max_position = 0.0;
-float max_weight = 0.0;
+int max_weight = 0;
 
 const int chipSelect = 53;
 File myFile;
@@ -54,7 +54,7 @@ File myFile;
 char filename[] = "LOG-001.csv";
 int logStartTime = 0;
 bool isLogging = false;
-int motorSpeed = 50;
+int motorSpeed = 10;
 
 void setup (void) {
   //Serial.begin(9600);  // Used when debugging
@@ -127,15 +127,22 @@ void loop (void) {
     // Print Weight on LCD
     lcd.setCursor(0, 1);
     lcd.print("Weight:");
-    lcd.setCursor(10, 1);
-    float currentWeight = scale.get_units();
+    lcd.setCursor(8, 1);
+    int currentWeight = (scale.get_units() / 0.00220462);
+
     // Disable negative weights (Makes output hard to read)
     if(currentWeight < 0) {
-      lcd.print(0.00);
+      lcd.print("000000");
     } else {
-      lcd.print(currentWeight, 2);
+      if (currentWeight<10000) lcd.print('0');
+      if (currentWeight<10000) lcd.print('0');
+      if (currentWeight<1000) lcd.print('0');
+      if (currentWeight<100) lcd.print('0');
+      if (currentWeight<10) lcd.print('0');
+      lcd.print(currentWeight);
     }
-    lcd.print(" lbs");
+    lcd.setCursor(15, 1);
+    lcd.print("grams");
 
     // Up button pushed
     if (prev_up != pushed_up) {
@@ -207,8 +214,9 @@ void loop (void) {
         
         newFile();
         isLogging = true;
+        scale.tare();
         max_position = 0.0;
-        max_weight = 0.0;
+        max_weight = 0;
         position = 0;
         positionMM = 0;
 
@@ -228,6 +236,7 @@ void loop (void) {
           endLog();
         }
         position = 0;
+        scale.tare();
         digitalWrite(Relay4, HIGH); // Turn on Red Light
         delay(1000);
         digitalWrite(Relay4, LOW); // Turn off Red light
@@ -253,7 +262,7 @@ void loop (void) {
       lcd.setCursor(0,2);
       lcd.print("Logging... "+String(logTime/1000)+" Sec");
 
-      if( (currentWeight*1.25+2) < max_weight) {
+      if( (currentWeight*1.25+500) < max_weight) {
         digitalWrite(Relay2, LOW);
         analogWrite(RPWM_Output, 0);
 
@@ -315,13 +324,13 @@ void endLog() {
   lcd.print("Weight:");
   lcd.setCursor(10, 2);
   lcd.print(max_weight);
-  lcd.print(" lbs");
+  lcd.print(" grams");
 
   // Last log entry
   logData(String(logTime),String(logPosition),String(logWeight));
   endLogging();
 
-  delay(5000);
+  delay(15000);
   lcd.clear();
 
   isLogging=false;
@@ -350,7 +359,7 @@ void newFile() {
         // Initialize file header
         addToBuffer("Log Number:," + String(filename[4]) + String(filename[5]) + String(filename[6]) + "\n");
         addToBuffer("Motor Power:,"+String(motorSpeed)+"%\n");
-        addToBuffer("Time(ms),Position(mm),Weight(lbs)\n");
+        addToBuffer("Time(ms),Position(mm),Weight(grams)\n");
         break;  // Leave the loop
       }
     }
